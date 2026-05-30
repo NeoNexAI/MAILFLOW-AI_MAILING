@@ -18,6 +18,10 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(255))
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     plan: Mapped[str] = mapped_column(String(20), default="free")
+    # SHA-256 hex of the org's API key (multi-tenant auth). Null until issued.
+    api_key_hash: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
