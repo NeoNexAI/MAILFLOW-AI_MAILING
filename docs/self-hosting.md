@@ -123,6 +123,21 @@ onboarding wizard). This requires registering an OAuth app once:
 > add yourself as a test user. If OAuth is not configured, the buttons return a
 > clear "oauth_not_configured" message and IMAP still works.
 
+## 3c. Billing (managed SaaS only — optional)
+
+Self-hosted instances have **no plan limits** and don't need Stripe. Billing and
+plan quotas only activate when `AUTH_MODE=multi` (managed SaaS):
+
+1. Create products/prices in Stripe; put the recurring Price IDs in
+   `STRIPE_PRICE_PRO` / `STRIPE_PRICE_TEAM`.
+2. Set `STRIPE_SECRET_KEY` and, for the webhook, `STRIPE_WEBHOOK_SECRET`.
+3. Point a Stripe webhook at `{API}/billing/webhook` (events
+   `checkout.session.completed`, `customer.subscription.deleted`).
+
+Without `STRIPE_SECRET_KEY`, `/billing/checkout` and `/billing/portal` return
+`501`; `/billing/plan` still reports usage. Plan limits (Free: 1 mailbox, 100
+emails/day) are enforced only in multi-tenant mode.
+
 ## 4. Operations
 
 - **Logs**: `docker compose -f infrastructure/docker-compose.yml logs -f api worker`
