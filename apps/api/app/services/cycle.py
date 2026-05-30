@@ -23,6 +23,7 @@ from mailflow_core.classification.rule_engine import RuleEngine
 from mailflow_core.email_parser import EmailParser
 from mailflow_core.providers.base import EmailData
 from mailflow_core.providers.imap_generic import ImapGenericProvider
+from mailflow_core.resilience import RetryPolicy, retry_with_backoff
 from mailflow_core.types import ClassificationResult, DraftRequest, ParsedEmail
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -158,8 +159,22 @@ class CycleService:
         emails: list[EmailData] = []
         try:
             try:
-                provider.connect()
-                emails = provider.fetch_unprocessed_emails()
+                # IMAP connect+fetch con reintentos: tolera fallos transitorios
+                # de red/servidor antes de abortar el ciclo.
+                async def _connect_and_fetch() -> list[EmailData]:
+                    provider.connect()
+                    return provider.fetch_unprocessed_emails()
+
+                emails = await retry_with_backoff(
+                    _connect_and_fetch,
+                    policy=RetryPolicy(max_attempts=3, base_delay=1.0),
+                    on_retry=lambda attempt, exc: log.warning(
+                        "IMAP fetch retry %d for account %s: %s",
+                        attempt,
+                        account_id,
+                        exc,
+                    ),
+                )
             except Exception as exc:
                 stats["last_error"] = str(exc)
                 stats["errors"] += 1
@@ -257,7 +272,26 @@ async def _process_one(
             body_html=parsed.body_html or None,
             classification=result,
         )
-        draft_text: str = generate_client.generate_draft(parsed, draft_request)
+
+        # La generación con LLM es la llamada externa más inestable: reintentar
+        # con backoff evita perder el borrador por un fallo transitorio. El email
+        # ya está clasificado y movido, así que un fallo final solo omite el draft.
+        async def _generate() -> str:
+            return generate_client.generate_draft(parsed, draft_request)
+
+        try:
+            draft_text = await retry_with_backoff(
+                _generate,
+                policy=RetryPolicy(max_attempts=3, base_delay=0.5),
+                on_retry=lambda attempt, exc: log.warning(
+                    "LLM draft retry %d for uid=%s: %s", attempt, email_data.uid, exc
+                ),
+            )
+        except Exception as exc:
+            log.warning(
+                "LLM draft generation failed for uid=%s: %s", email_data.uid, exc
+            )
+            draft_text = ""
         if draft_text:
             draft_bytes = _build_draft_bytes(
                 subject=parsed.subject_normalized,
