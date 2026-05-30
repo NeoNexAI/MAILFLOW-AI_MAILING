@@ -22,9 +22,27 @@ async def on_startup(ctx: dict) -> None:
 
 
 async def process_account_cycle(ctx: dict, account_id: str) -> dict:
-    """Job ARQ principal. account_id como str para serialización JSON/Redis."""
+    """Job ARQ principal. account_id como str para serialización JSON/Redis.
+
+    Resiliencia:
+    - CycleService.run() captura internamente los fallos de IMAP/LLM por email
+      (con reintentos+backoff) y registra el resultado en audit_log, así que el
+      camino normal no lanza.
+    - Si run() lanzara igualmente (p.ej. DB caída al claim/finalize), dejamos que
+      la excepción propague para que ARQ reintente el job (MAX_TRIES). Cuando se
+      agotan los reintentos, ARQ invoca on_job_failure → dead-letter logging.
+    """
+    job_try = ctx.get("job_try", 1)
+    log.info("cycle start account=%s try=%d", account_id, job_try)
     service = CycleService(ctx["session_factory"])
     result = await service.run(UUID(account_id))
+    log.info(
+        "cycle done account=%s emails=%d drafts=%d errors=%d",
+        account_id,
+        result.emails_processed,
+        result.drafts_saved,
+        result.errors,
+    )
     return {
         "account_id": account_id,
         "cycle_id": str(result.cycle_id),
@@ -32,6 +50,24 @@ async def process_account_cycle(ctx: dict, account_id: str) -> dict:
         "drafts_saved": result.drafts_saved,
         "errors": result.errors,
     }
+
+
+async def on_job_failure(ctx: dict, exc: BaseException) -> None:
+    """Dead-letter hook: registra los jobs que agotaron todos los reintentos.
+
+    ARQ llama a este hook cuando un job falla definitivamente. Aquí lo dejamos
+    trazado de forma estructurada; un sink externo (Sentry/alertas) puede
+    engancharse a estos logs.
+    """
+    job_id = ctx.get("job_id")
+    func = ctx.get("job_name") or ctx.get("function")
+    log.error(
+        "DEAD-LETTER job_id=%s func=%s exhausted retries: %s: %s",
+        job_id,
+        func,
+        type(exc).__name__,
+        exc,
+    )
 
 
 async def schedule_cycles(ctx: dict) -> None:
@@ -58,5 +94,11 @@ class WorkerSettings:
     functions = [process_account_cycle]
     cron_jobs = [cron(schedule_cycles, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55})]
     on_startup = on_startup
+    on_job_failure = on_job_failure
+    # Reintentos a nivel de job: ante un fallo no capturado (p.ej. DB caída),
+    # ARQ reencola con backoff propio hasta agotar max_tries → dead-letter.
+    max_tries = 3
+    # Un ciclo no debería tardar más de unos minutos; corta cuelgues de IMAP/LLM.
+    job_timeout = 300
     queue_name = "mailflow:default"
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
