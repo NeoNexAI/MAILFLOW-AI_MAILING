@@ -12,7 +12,17 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import async_session_factory
+from app.routers import (
+    accounts_router,
+    cycles_router,
+    llm_providers_router,
+    rules_router,
+)
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger("mailflow.api")
 
 app = FastAPI(
@@ -28,6 +38,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(accounts_router)
+app.include_router(llm_providers_router)
+app.include_router(rules_router)
+app.include_router(cycles_router)
 
 
 @app.get("/health")
