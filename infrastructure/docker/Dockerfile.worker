@@ -1,0 +1,23 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN pip install uv
+
+# Dependencias (capa cacheable): solo los manifests primero.
+COPY pyproject.toml ./
+COPY apps/api/pyproject.toml apps/api/
+COPY apps/worker/pyproject.toml apps/worker/
+COPY packages/core/pyproject.toml packages/core/
+
+RUN uv sync --no-dev
+
+# Código del worker + sus dependencias (api app + core).
+COPY apps/api/app/ apps/api/app/
+COPY apps/worker/worker/ apps/worker/worker/
+COPY packages/core/mailflow_core/ packages/core/mailflow_core/
+
+# El worker importa `worker.main` y `app.*`; ambos paths deben estar disponibles.
+ENV PYTHONPATH=/app/apps/worker:/app/apps/api
+
+CMD ["uv", "run", "arq", "worker.main.WorkerSettings"]

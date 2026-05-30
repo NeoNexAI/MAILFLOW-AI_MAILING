@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -14,6 +15,13 @@ from app.models import Base  # noqa: F401 — side-effect: registra todos los mo
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# DATABASE_URL del entorno tiene prioridad sobre el valor de alembic.ini, de modo
+# que las migraciones funcionan en cualquier despliegue (Docker, CI, self-host)
+# sin editar el .ini. Si no está, se usa el de alembic.ini.
+_env_url = os.getenv("DATABASE_URL")
+if _env_url:
+    config.set_main_option("sqlalchemy.url", _env_url)
 
 target_metadata = Base.metadata
 

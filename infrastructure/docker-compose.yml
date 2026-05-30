@@ -1,0 +1,82 @@
+# MailFlow — self-host (OSS). Single-tenant por defecto.
+#
+#   cp .env.example .env   # y rellena SECRET_KEY (ver README)
+#   docker compose -f infrastructure/docker-compose.yml up -d
+#
+# Servicios: postgres + redis + api (migra al arrancar) + worker (ARQ).
+# El frontend (apps/web) se añadirá en la fase de UI.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mailflow}
+      POSTGRES_USER: ${POSTGRES_USER:-mailflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mailflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mailflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mailflow}:${POSTGRES_PASSWORD:-mailflow}@postgres:5432/${POSTGRES_DB:-mailflow}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required — see README}
+      AUTH_MODE: ${AUTH_MODE:-single}
+      SINGLE_TENANT_API_KEY: ${SINGLE_TENANT_API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mailflow}:${POSTGRES_PASSWORD:-mailflow}@postgres:5432/${POSTGRES_DB:-mailflow}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required — see README}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
