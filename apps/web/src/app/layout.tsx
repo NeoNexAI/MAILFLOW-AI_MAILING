@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "MailFlow",
@@ -12,7 +14,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <nav className="nav">
+          <strong>
+            <Link href="/">MailFlow</Link>
+          </strong>
+          <div className="spacer" />
+          <Link href="/app/dashboard">Dashboard</Link>
+          <Link href="/onboarding">Get started</Link>
+        </nav>
+        {children}
+      </body>
     </html>
   );
 }

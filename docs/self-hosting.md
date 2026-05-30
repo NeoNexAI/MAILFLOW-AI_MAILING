@@ -1,11 +1,8 @@
 # Self-hosting MailFlow
 
-Run MailFlow on your own server with Docker. This sets up the **backend** —
-the API and the worker that classifies your email and writes draft replies. The
-web UI is added in a later milestone; today you drive it via the REST API.
-
-> Status: backend (API + worker) is runnable. Frontend onboarding/dashboard is
-> in progress. Until then, configure accounts via the API (examples below).
+Run MailFlow on your own server with Docker. This sets up the full stack — the
+web app, the API, and the worker that classifies your email and writes draft
+replies.
 
 ## Requirements
 
@@ -39,6 +36,8 @@ Key variables (see `.env.example` for the full list):
 | `SINGLE_TENANT_API_KEY` | empty | optional key to lock the local API |
 | `POSTGRES_PASSWORD` | `mailflow` | change for anything internet-facing |
 | `API_PORT` | `8000` | host port for the API |
+| `WEB_PORT` | `3000` | host port for the web app |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | API URL baked into the web build |
 | `CORS_ORIGINS` | `http://localhost:3000` | allowed browser origins |
 
 ## 2. Start
@@ -47,19 +46,22 @@ Key variables (see `.env.example` for the full list):
 docker compose -f infrastructure/docker-compose.yml up -d --build
 ```
 
-This starts **postgres**, **redis**, **api**, and **worker**. The API container
-runs database migrations (`alembic upgrade head`) automatically before serving.
+This starts **postgres**, **redis**, **api**, **worker**, and **web**. The API
+container runs database migrations (`alembic upgrade head`) automatically before
+serving.
 
-Check health:
+Then open the web app at **<http://localhost:3000>** and follow the onboarding
+wizard (connect an LLM provider, then a mailbox). Health and docs:
 
 ```bash
-curl http://localhost:8000/health
-# {"status":"ok","db":"up",...}
+curl http://localhost:8000/health   # {"status":"ok","db":"up",...}
 ```
 
 Interactive API docs: <http://localhost:8000/docs>.
 
-## 3. Connect a mailbox (via API)
+## 3. Connect a mailbox (via API, optional)
+
+The web onboarding does this for you. If you prefer the API directly:
 
 In single-tenant mode no auth header is required (unless you set
 `SINGLE_TENANT_API_KEY`, in which case add `-H "X-API-Key: <key>"`).

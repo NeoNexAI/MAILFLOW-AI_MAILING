@@ -1,5 +1,17 @@
 {
 	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"files": {
+		"ignore": [
+			"**/node_modules",
+			"**/.next",
+			"**/.turbo",
+			"**/dist",
+			"**/.venv",
+			"**/__pycache__",
+			"uv.lock",
+			"pnpm-lock.yaml"
+		]
+	},
 	"json": {
 		"formatter": {
 			"enabled": false

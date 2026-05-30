@@ -23,6 +23,7 @@ node_modules/
 out/
 dist/
 *.tsbuildinfo
+next-env.d.ts
 
 # uv
 .uv/
