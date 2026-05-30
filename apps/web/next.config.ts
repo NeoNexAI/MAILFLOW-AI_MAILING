@@ -1,10 +1,11 @@
 import type { NextConfig } from "next";
-import createNextIntlPlugin from "next-intl/plugin";
-
-const withNextIntl = createNextIntlPlugin();
 
 const nextConfig: NextConfig = {
-  experimental: {},
+  // Standalone output keeps the Docker image small (only the server + traced deps).
+  output: "standalone",
 };
 
-export default withNextIntl(nextConfig);
+// next-intl will be re-introduced when the i18n request config + locale routing
+// land (the dependency is already in package.json). Until then the plugin is
+// disabled so `next build` does not require ./i18n/request.ts.
+export default nextConfig;
