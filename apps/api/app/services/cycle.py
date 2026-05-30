@@ -27,6 +27,7 @@ from mailflow_core.resilience import RetryPolicy, retry_with_backoff
 from mailflow_core.types import ClassificationResult, DraftRequest, ParsedEmail
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app import oauth
 from app.config import settings
 from app.crypto import decrypt
 from app.models.email_account import EmailAccount
@@ -139,15 +140,28 @@ class CycleService:
             await session.commit()
 
         # ── 3. Construir herramientas de dominio ────────────────────────────
-        password = decrypt(account.encrypted_credentials, settings.SECRET_KEY)[
-            "password"
-        ]
+        # Cuentas OAuth (gmail/microsoft): refrescar access_token desde el refresh
+        # token cifrado. Cuentas password: descifrar la contraseña IMAP.
+        password: str | None = None
+        access_token: str | None = None
+        if account.provider_type in ("gmail", "microsoft") and account.encrypted_oauth:
+            refresh_token = decrypt(account.encrypted_oauth, settings.SECRET_KEY)[
+                "refresh_token"
+            ]
+            access_token = oauth.access_token_from_refresh(
+                account.provider_type, refresh_token
+            )
+        elif account.encrypted_credentials:
+            password = decrypt(account.encrypted_credentials, settings.SECRET_KEY)[
+                "password"
+            ]
         provider = ImapGenericProvider(
             host=account.imap_host,
             port=account.imap_port,
             username=account.username,
             password=password,
             use_ssl=account.use_ssl,
+            access_token=access_token,
         )
         parser = EmailParser()
         # ADR-007: modelos distintos para clasificación y generación

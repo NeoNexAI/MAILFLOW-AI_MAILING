@@ -73,4 +73,8 @@ export const api = {
     request<CycleEnqueued>(`/accounts/${accountId}/cycles/run`, {
       method: "POST",
     }),
+
+  // OAuth — returns the provider consent URL to redirect the browser to.
+  oauthAuthorizeUrl: (provider: "gmail" | "microsoft") =>
+    request<{ authorize_url: string }>(`/oauth/${provider}/authorize`),
 };

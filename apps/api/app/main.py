@@ -16,6 +16,7 @@ from app.routers import (
     accounts_router,
     cycles_router,
     llm_providers_router,
+    oauth_router,
     rules_router,
 )
 
@@ -43,6 +44,7 @@ app.include_router(accounts_router)
 app.include_router(llm_providers_router)
 app.include_router(rules_router)
 app.include_router(cycles_router)
+app.include_router(oauth_router)
 
 
 @app.get("/health")

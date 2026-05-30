@@ -24,7 +24,10 @@ class EmailAccount(Base):
     imap_port: Mapped[int] = mapped_column(Integer, default=993)
     use_ssl: Mapped[bool] = mapped_column(Boolean, default=True)
     username: Mapped[str] = mapped_column(String(255))
-    encrypted_credentials: Mapped[str] = mapped_column(String)
+    # Password IMAP cifrado (cuentas password). Null en cuentas OAuth.
+    encrypted_credentials: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Refresh token OAuth cifrado (cuentas gmail/microsoft). Null en cuentas password.
+    encrypted_oauth: Mapped[str | None] = mapped_column(String, nullable=True)
     inbox_folder: Mapped[str] = mapped_column(String(255), default="INBOX")
     unclassified_folder: Mapped[str] = mapped_column(
         String(255), default="Sin_Clasificar"

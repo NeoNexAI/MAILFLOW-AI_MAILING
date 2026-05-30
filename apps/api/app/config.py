@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     # enviarla; si se deja vacía, el self-host queda abierto (uso en LAN/local).
     SINGLE_TENANT_API_KEY: str = ""
 
+    # OAuth2 (conectar Gmail / Microsoft 365 sin contraseña). Vacío = desactivado.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    MICROSOFT_TENANT_ID: str = "common"
+    # Base pública del API donde el proveedor redirige tras el consentimiento.
+    # El callback completo es {OAUTH_REDIRECT_BASE}/oauth/{provider}/callback.
+    OAUTH_REDIRECT_BASE: str = "http://localhost:8000"
+    # A dónde enviar al usuario en el frontend tras conectar (éxito/fracaso).
+    OAUTH_SUCCESS_REDIRECT: str = "http://localhost:3000/app/dashboard"
+
     @field_validator("AUTH_MODE", mode="before")
     @classmethod
     def _normalize_auth_mode(cls, value: object) -> object:

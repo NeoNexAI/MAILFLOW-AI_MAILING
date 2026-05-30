@@ -102,6 +102,27 @@ Inspect processing history:
 curl http://localhost:8000/accounts/<ACCOUNT_ID>/cycles
 ```
 
+## 3b. Connect Gmail / Microsoft 365 (OAuth, optional)
+
+Instead of IMAP passwords you can connect mailboxes via OAuth (one-click in the
+onboarding wizard). This requires registering an OAuth app once:
+
+1. **Google** (Gmail): in Google Cloud Console create OAuth credentials (Web
+   application), enable the Gmail/IMAP scope `https://mail.google.com/`, and add
+   the redirect URI `{OAUTH_REDIRECT_BASE}/oauth/gmail/callback`. Put the client
+   id/secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+2. **Microsoft 365**: in Azure AD register an app, add the delegated permission
+   `IMAP.AccessAsUser.All` (+ `offline_access`), and the redirect URI
+   `{OAUTH_REDIRECT_BASE}/oauth/microsoft/callback`. Put the values in
+   `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` (and `MICROSOFT_TENANT_ID`
+   if not multi-tenant).
+3. Set `OAUTH_REDIRECT_BASE` to the **public** URL of your API and
+   `OAUTH_SUCCESS_REDIRECT` to your web app's dashboard URL.
+
+> Google verification of a production app can take days/weeks; until approved,
+> add yourself as a test user. If OAuth is not configured, the buttons return a
+> clear "oauth_not_configured" message and IMAP still works.
+
 ## 4. Operations
 
 - **Logs**: `docker compose -f infrastructure/docker-compose.yml logs -f api worker`
