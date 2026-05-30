@@ -96,6 +96,23 @@ export default function OnboardingPage() {
     }
   }
 
+  async function connectOAuth(provider: "gmail" | "microsoft") {
+    setError(null);
+    setBusy(true);
+    try {
+      const { authorize_url } = await api.oauthAuthorizeUrl(provider);
+      // Redirige el navegador al consentimiento del proveedor.
+      window.location.href = authorize_url;
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : `Could not start ${provider} sign-in`,
+      );
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="container">
       <h1>Get started</h1>
@@ -186,79 +203,120 @@ export default function OnboardingPage() {
       )}
 
       {step === "account" && (
-        <form className="card" onSubmit={submitAccount}>
-          <h3>2. Connect a mailbox (IMAP)</h3>
-          <div className="row">
-            <div className="field">
-              <label htmlFor="imap-host">IMAP host</label>
-              <input
-                id="imap-host"
-                placeholder="imap.example.com"
-                value={acct.imap_host}
-                onChange={(e) =>
-                  setAcct({ ...acct, imap_host: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="imap-user">Username</label>
-              <input
-                id="imap-user"
-                placeholder="you@example.com"
-                value={acct.username}
-                onChange={(e) => setAcct({ ...acct, username: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-          <div className="row">
-            <div className="field">
-              <label htmlFor="imap-pass">Password / app password</label>
-              <input
-                id="imap-pass"
-                type="password"
-                value={acct.password}
-                onChange={(e) => setAcct({ ...acct, password: e.target.value })}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="imap-interval">Check every (minutes)</label>
-              <input
-                id="imap-interval"
-                type="number"
-                min={1}
-                max={1440}
-                value={acct.interval_minutes}
-                onChange={(e) =>
-                  setAcct({ ...acct, interval_minutes: Number(e.target.value) })
-                }
-              />
-            </div>
-          </div>
-          {providers.length > 0 && (
-            <div className="field">
-              <label htmlFor="acct-llm">LLM provider</label>
-              <select
-                id="acct-llm"
-                value={acct.llm_provider_id}
-                onChange={(e) =>
-                  setAcct({ ...acct, llm_provider_id: e.target.value })
-                }
+        <>
+          <div className="card">
+            <h3>2. Connect a mailbox</h3>
+            <p className="muted">
+              Use one-click sign-in (recommended) or enter IMAP details below.
+            </p>
+            <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() => connectOAuth("gmail")}
               >
-                {providers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+                Connect Gmail
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() => connectOAuth("microsoft")}
+              >
+                Connect Microsoft 365
+              </button>
             </div>
-          )}
-          <button className="btn" type="submit" disabled={busy}>
-            {busy ? "Connecting…" : "Finish"}
-          </button>
-        </form>
+            <p
+              className="muted"
+              style={{ fontSize: "0.8rem", marginBottom: 0 }}
+            >
+              OAuth must be configured on the server (GOOGLE_/MICROSOFT_ client
+              credentials). Otherwise use IMAP below.
+            </p>
+          </div>
+
+          <form className="card" onSubmit={submitAccount}>
+            <h3>Or connect via IMAP</h3>
+            <div className="row">
+              <div className="field">
+                <label htmlFor="imap-host">IMAP host</label>
+                <input
+                  id="imap-host"
+                  placeholder="imap.example.com"
+                  value={acct.imap_host}
+                  onChange={(e) =>
+                    setAcct({ ...acct, imap_host: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="imap-user">Username</label>
+                <input
+                  id="imap-user"
+                  placeholder="you@example.com"
+                  value={acct.username}
+                  onChange={(e) =>
+                    setAcct({ ...acct, username: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+            <div className="row">
+              <div className="field">
+                <label htmlFor="imap-pass">Password / app password</label>
+                <input
+                  id="imap-pass"
+                  type="password"
+                  value={acct.password}
+                  onChange={(e) =>
+                    setAcct({ ...acct, password: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="imap-interval">Check every (minutes)</label>
+                <input
+                  id="imap-interval"
+                  type="number"
+                  min={1}
+                  max={1440}
+                  value={acct.interval_minutes}
+                  onChange={(e) =>
+                    setAcct({
+                      ...acct,
+                      interval_minutes: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+            {providers.length > 0 && (
+              <div className="field">
+                <label htmlFor="acct-llm">LLM provider</label>
+                <select
+                  id="acct-llm"
+                  value={acct.llm_provider_id}
+                  onChange={(e) =>
+                    setAcct({ ...acct, llm_provider_id: e.target.value })
+                  }
+                >
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button className="btn" type="submit" disabled={busy}>
+              {busy ? "Connecting…" : "Finish"}
+            </button>
+          </form>
+        </>
       )}
 
       {step === "done" && (

@@ -37,20 +37,29 @@ def _extract_body(msg: Message) -> tuple[str, str]:
 
 
 class ImapGenericProvider(EmailProvider):
-    """IMAP provider using password authentication via imapclient."""
+    """IMAP provider using password or OAuth2 (XOAUTH2) authentication.
+
+    Gmail and Microsoft 365 both speak IMAP with XOAUTH2, so the same provider
+    serves all account types: pass `access_token` for OAuth, or `password` for
+    classic IMAP. The rest of the mailbox logic is identical.
+    """
 
     def __init__(
         self,
         host: str,
         port: int,
         username: str,
-        password: str,
+        password: str | None = None,
         use_ssl: bool = True,
+        access_token: str | None = None,
     ) -> None:
+        if not password and not access_token:
+            raise ValueError("ImapGenericProvider requires password or access_token")
         self._host = host
         self._port = port
         self._username = username
         self._password = password
+        self._access_token = access_token
         self._use_ssl = use_ssl
         self._client: imapclient.IMAPClient | None = None
         self._separator: str = "/"
@@ -62,7 +71,10 @@ class ImapGenericProvider(EmailProvider):
             self._client = imapclient.IMAPClient(
                 self._host, port=self._port, use_uid=True, ssl=self._use_ssl
             )
-            self._client.login(self._username, self._password)
+            if self._access_token:
+                self._client.oauth2_login(self._username, self._access_token)
+            else:
+                self._client.login(self._username, self._password)
             self._detect_separator()
             self._detect_drafts_folder()
         except IMAPConnectionError:
