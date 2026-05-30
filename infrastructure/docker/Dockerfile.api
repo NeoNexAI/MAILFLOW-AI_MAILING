@@ -4,15 +4,22 @@ WORKDIR /app
 
 RUN pip install uv
 
+# Dependencias (capa cacheable): solo los manifests primero.
 COPY pyproject.toml ./
 COPY apps/api/pyproject.toml apps/api/
 COPY packages/core/pyproject.toml packages/core/
 
 RUN uv sync --no-dev
 
+# Código de la aplicación + migraciones + entrypoint.
 COPY apps/api/app/ apps/api/app/
+COPY apps/api/alembic/ apps/api/alembic/
+COPY apps/api/alembic.ini apps/api/alembic.ini
 COPY packages/core/mailflow_core/ packages/core/mailflow_core/
+COPY infrastructure/docker/entrypoint.api.sh /entrypoint.api.sh
+RUN chmod +x /entrypoint.api.sh
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "apps.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# El entrypoint aplica migraciones (alembic upgrade head) y arranca uvicorn.
+ENTRYPOINT ["/entrypoint.api.sh"]

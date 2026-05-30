@@ -24,10 +24,18 @@ MailFlow automatically classifies incoming emails into your IMAP folders and gen
 git clone https://github.com/JonatanGhub/mailflow.git
 cd mailflow
 cp .env.example .env
-docker compose up
+# Set SECRET_KEY in .env (a Fernet key):
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+docker compose -f infrastructure/docker-compose.yml up -d --build
 ```
 
-Open http://localhost:3000 and connect your inbox in under 2 minutes.
+This brings up the backend (postgres + redis + API + worker); the API migrates
+the database on startup. Check `curl http://localhost:8000/health` and browse
+the API at <http://localhost:8000/docs>.
+
+See **[docs/self-hosting.md](docs/self-hosting.md)** for connecting a mailbox
+and full operations. The web dashboard is in progress; until then you configure
+accounts via the REST API.
 
 ## Tech Stack
 
