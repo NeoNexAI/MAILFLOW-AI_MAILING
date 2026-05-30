@@ -32,6 +32,8 @@ dist/
 .env.local
 .env.*.local
 *.env
+# Per-app .env (e.g. apps/api/.env holds the Fernet SECRET_KEY — never commit)
+apps/*/.env
 
 # Secrets
 *.pem
