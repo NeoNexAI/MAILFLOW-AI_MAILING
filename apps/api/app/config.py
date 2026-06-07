@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     # A dónde enviar al usuario en el frontend tras conectar (éxito/fracaso).
     OAUTH_SUCCESS_REDIRECT: str = "http://localhost:3000/app/dashboard"
 
+    # Billing (Stripe). Vacío = billing desactivado (rutas devuelven 501).
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_PRO: str = ""
+    STRIPE_PRICE_TEAM: str = ""
+    BILLING_SUCCESS_URL: str = "http://localhost:3000/app/billing?status=success"
+    BILLING_CANCEL_URL: str = "http://localhost:3000/app/billing?status=cancel"
+
     @field_validator("AUTH_MODE", mode="before")
     @classmethod
     def _normalize_auth_mode(cls, value: object) -> object:

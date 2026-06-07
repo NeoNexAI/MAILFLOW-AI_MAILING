@@ -32,6 +32,8 @@ from app.config import settings
 from app.crypto import decrypt
 from app.models.email_account import EmailAccount
 from app.models.llm_provider import LLMProvider
+from app.models.organization import Organization
+from app.quota import can_process_more
 from app.repositories.account import AccountRepository
 from app.repositories.cycle import CycleRepository
 
@@ -138,6 +140,28 @@ class CycleService:
                 session
             ).get_full_config(account_id)
             await session.commit()
+
+        # ── 2b. Cuota del plan: si la org superó su límite diario de emails,
+        # se salta el ciclo (sin romper) y se registra el motivo. ────────────
+        async with self._sf() as session:
+            org = await session.get(Organization, account.org_id)
+            plan_key = org.plan if org else None
+            if not await can_process_more(session, account.org_id, plan_key):
+                log.info(
+                    "Account %s skipped: daily email quota reached (plan=%s)",
+                    account_id,
+                    plan_key,
+                )
+                await CycleRepository(session).finalize_audit_log(
+                    cycle_id,
+                    emails=0,
+                    drafts=0,
+                    errors=0,
+                    error_detail="quota_reached",
+                    duration_ms=int((time.monotonic() - start) * 1000),
+                )
+                await session.commit()
+                return CycleResult(cycle_id, 0, 0, 0)
 
         # ── 3. Construir herramientas de dominio ────────────────────────────
         # Cuentas OAuth (gmail/microsoft): refrescar access_token desde el refresh

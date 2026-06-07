@@ -7,6 +7,7 @@ import type {
   EmailAccountCreate,
   LLMProvider,
   LLMProviderCreate,
+  PlanStatus,
 } from "./types";
 
 export class ApiError extends Error {
@@ -77,4 +78,14 @@ export const api = {
   // OAuth — returns the provider consent URL to redirect the browser to.
   oauthAuthorizeUrl: (provider: "gmail" | "microsoft") =>
     request<{ authorize_url: string }>(`/oauth/${provider}/authorize`),
+
+  // Billing
+  planStatus: () => request<PlanStatus>("/billing/plan"),
+  checkout: (plan: "pro" | "team") =>
+    request<{ url: string }>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan }),
+    }),
+  billingPortal: () =>
+    request<{ url: string }>("/billing/portal", { method: "POST" }),
 };

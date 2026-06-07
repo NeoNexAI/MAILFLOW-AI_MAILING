@@ -14,6 +14,7 @@ from app.crypto import encrypt
 from app.database import get_session
 from app.models.email_account import EmailAccount
 from app.models.organization import Organization
+from app.quota import can_add_account
 from app.schemas import EmailAccountCreate, EmailAccountOut, EmailAccountUpdate
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
@@ -57,6 +58,12 @@ async def create_account(
     org: Organization = Depends(require_org),
     session: AsyncSession = Depends(get_session),
 ) -> EmailAccount:
+    # Cuota del plan: el plan free limita el número de cuentas conectadas.
+    if not await can_add_account(session, org.id, org.plan):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="account_limit_reached",
+        )
     account = EmailAccount(
         org_id=org.id,
         provider_type=payload.provider_type,

@@ -68,3 +68,13 @@ export interface CycleEnqueued {
   enqueued: boolean;
   job_id: string | null;
 }
+
+export interface PlanStatus {
+  plan: string;
+  label: string;
+  max_accounts: number | null;
+  max_emails_per_day: number | null;
+  accounts_used: number;
+  emails_today: number;
+  billing_enabled: boolean;
+}

@@ -21,6 +21,7 @@ export default function RootLayout({
           </strong>
           <div className="spacer" />
           <Link href="/app/dashboard">Dashboard</Link>
+          <Link href="/app/billing">Billing</Link>
           <Link href="/onboarding">Get started</Link>
         </nav>
         {children}
