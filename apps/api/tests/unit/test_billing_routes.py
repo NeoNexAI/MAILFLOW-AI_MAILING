@@ -34,9 +34,20 @@ async def test_plan_status_defaults_to_free(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["plan"] == "free"
+    assert body["seats"] == 1
     assert body["max_accounts"] == 1
     assert body["max_emails_per_day"] == 100
     assert body["billing_enabled"] is False
+
+
+async def test_checkout_team_requires_min_seats(client):
+    # Sin seats → 400; con menos de 3 → 400. (Antes de tocar Stripe.)
+    r1 = await client.post("/billing/checkout", json={"plan": "team"})
+    assert r1.status_code == 400
+    assert r1.json()["detail"] == "seats_minimum_3"
+    r2 = await client.post("/billing/checkout", json={"plan": "team", "seats": 2})
+    assert r2.status_code == 400
+    assert r2.json()["detail"] == "seats_minimum_3"
 
 
 async def test_checkout_501_when_billing_not_configured(client, monkeypatch):
@@ -145,3 +156,51 @@ async def test_webhook_checkout_completed_upgrades_org_and_dedups(
     )
     assert r2.status_code == 200
     assert r2.json()["status"] == "duplicate"
+
+
+async def test_webhook_team_checkout_applies_seats_and_cancel_resets(
+    client, session, monkeypatch
+):
+    """Team con seats en metadata → org.seats; al cancelar → free + 1 seat."""
+    import uuid
+
+    from app import billing
+    from app.models.organization import Organization
+
+    org = Organization(name="T", slug=f"tm-{uuid.uuid4().hex[:8]}", plan="free")
+    session.add(org)
+    await session.commit()
+
+    upgraded = {
+        "id": f"evt_{uuid.uuid4().hex}",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {"org_id": str(org.id), "plan": "team", "seats": "5"},
+                "customer": "cus_t",
+                "subscription": "sub_t",
+            }
+        },
+    }
+    monkeypatch.setattr(billing, "parse_webhook", lambda payload, sig: upgraded)
+    r = await client.post(
+        "/billing/webhook", content=b"{}", headers={"stripe-signature": "x"}
+    )
+    assert r.status_code == 200
+    await session.refresh(org)
+    assert org.plan == "team"
+    assert org.seats == 5
+
+    cancelled = {
+        "id": f"evt_{uuid.uuid4().hex}",
+        "type": "customer.subscription.deleted",
+        "data": {"object": {"id": "sub_t"}},
+    }
+    monkeypatch.setattr(billing, "parse_webhook", lambda payload, sig: cancelled)
+    r = await client.post(
+        "/billing/webhook", content=b"{}", headers={"stripe-signature": "x"}
+    )
+    assert r.status_code == 200
+    await session.refresh(org)
+    assert org.plan == "free"
+    assert org.seats == 1

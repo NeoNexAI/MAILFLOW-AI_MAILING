@@ -23,9 +23,14 @@ logger = logging.getLogger("mailflow.api")
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 
+# El plan Team se factura por asiento; mínimo comercial (PLAN.md §3.77).
+TEAM_MIN_SEATS = 3
+
+
 class PlanStatus(BaseModel):
     plan: str
     label: str
+    seats: int
     max_accounts: int | None
     max_emails_per_day: int | None
     accounts_used: int
@@ -35,6 +40,8 @@ class PlanStatus(BaseModel):
 
 class CheckoutRequest(BaseModel):
     plan: str  # "pro" | "team"
+    # Asientos: solo aplica a team (mínimo TEAM_MIN_SEATS). Ignorado en pro.
+    seats: int | None = None
 
 
 class UrlResponse(BaseModel):
@@ -50,6 +57,7 @@ async def plan_status(
     return PlanStatus(
         plan=plan.key,
         label=plan.label,
+        seats=org.seats,
         max_accounts=plan.max_accounts,
         max_emails_per_day=plan.max_emails_per_day,
         accounts_used=await quota.count_accounts(session, org.id),
@@ -65,6 +73,13 @@ async def checkout(
 ) -> UrlResponse:
     if payload.plan not in ("pro", "team"):
         raise HTTPException(status_code=400, detail="invalid_plan")
+    # Team se factura por asiento (mínimo TEAM_MIN_SEATS); pro siempre 1.
+    if payload.plan == "team":
+        seats = payload.seats or 0
+        if seats < TEAM_MIN_SEATS:
+            raise HTTPException(status_code=400, detail="seats_minimum_3")
+    else:
+        seats = 1
     try:
         # Las llamadas al SDK de Stripe son síncronas → a un hilo.
         url = await asyncio.to_thread(
@@ -72,6 +87,7 @@ async def checkout(
             payload.plan,
             str(org.id),
             org.stripe_customer_id,
+            seats,
         )
     except billing.BillingNotConfigured as exc:
         raise HTTPException(status_code=501, detail="billing_not_configured") from exc
@@ -136,25 +152,29 @@ async def _apply_event(session: AsyncSession, event: dict) -> None:
     obj = event.get("data", {}).get("object", {})
 
     if etype == "checkout.session.completed":
-        org_id = (obj.get("metadata") or {}).get("org_id") or obj.get(
-            "client_reference_id"
-        )
-        plan = (obj.get("metadata") or {}).get("plan", "pro")
+        metadata = obj.get("metadata") or {}
+        org_id = metadata.get("org_id") or obj.get("client_reference_id")
+        plan = metadata.get("plan", "pro")
         org = await _org(session, org_id)
         if org:
             org.plan = plan
+            try:
+                org.seats = max(1, int(metadata.get("seats", "1")))
+            except (TypeError, ValueError):
+                org.seats = 1
             org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
             org.stripe_subscription_id = (
                 obj.get("subscription") or org.stripe_subscription_id
             )
             await session.commit()
-            logger.info("org %s upgraded to %s", org_id, plan)
+            logger.info("org %s upgraded to %s (seats=%d)", org_id, plan, org.seats)
 
     elif etype in ("customer.subscription.deleted", "customer.subscription.canceled"):
         sub_id = obj.get("id")
         org = await _org_by_subscription(session, sub_id)
         if org:
             org.plan = "free"
+            org.seats = 1
             await session.commit()
             logger.info("org %s downgraded to free (subscription ended)", org.id)
 

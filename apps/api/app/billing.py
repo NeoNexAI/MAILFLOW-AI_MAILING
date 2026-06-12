@@ -39,16 +39,23 @@ def price_for_plan(plan_key: str) -> str:
     return price
 
 
-def create_checkout_session(plan_key: str, org_id: str, customer_id: str | None) -> str:
-    """Crea una Checkout Session de suscripción y devuelve su URL."""
+def create_checkout_session(
+    plan_key: str, org_id: str, customer_id: str | None, seats: int = 1
+) -> str:
+    """Crea una Checkout Session de suscripción y devuelve su URL.
+
+    `seats` es la cantidad de la línea de suscripción: 1 para pro, nº de
+    asientos para team (el plan Team se factura por usuario). El webhook lee
+    metadata.seats para fijar organizations.seats.
+    """
     stripe = _client()
     params = {
         "mode": "subscription",
-        "line_items": [{"price": price_for_plan(plan_key), "quantity": 1}],
+        "line_items": [{"price": price_for_plan(plan_key), "quantity": seats}],
         "success_url": settings.BILLING_SUCCESS_URL,
         "cancel_url": settings.BILLING_CANCEL_URL,
         "client_reference_id": org_id,
-        "metadata": {"org_id": org_id, "plan": plan_key},
+        "metadata": {"org_id": org_id, "plan": plan_key, "seats": str(seats)},
     }
     if customer_id:
         params["customer"] = customer_id

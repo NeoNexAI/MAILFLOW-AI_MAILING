@@ -81,10 +81,10 @@ export const api = {
 
   // Billing
   planStatus: () => request<PlanStatus>("/billing/plan"),
-  checkout: (plan: "pro" | "team") =>
+  checkout: (plan: "pro" | "team", seats?: number) =>
     request<{ url: string }>("/billing/checkout", {
       method: "POST",
-      body: JSON.stringify({ plan }),
+      body: JSON.stringify(seats != null ? { plan, seats } : { plan }),
     }),
   billingPortal: () =>
     request<{ url: string }>("/billing/portal", { method: "POST" }),
