@@ -60,8 +60,5 @@ desktop.ini
 *.sqlite
 *.sqlite3
 
-# Alembic auto-generated
-/apps/api/alembic/versions/*.py
-
 # Git worktrees
 .worktrees/

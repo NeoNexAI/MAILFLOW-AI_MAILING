@@ -26,7 +26,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "uq_organizations_api_key_hash", "organizations", type_="unique"
-    )
+    op.drop_constraint("uq_organizations_api_key_hash", "organizations", type_="unique")
     op.drop_column("organizations", "api_key_hash")

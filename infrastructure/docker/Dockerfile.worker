@@ -20,4 +20,8 @@ COPY packages/core/mailflow_core/ packages/core/mailflow_core/
 # El worker importa `worker.main` y `app.*`; ambos paths deben estar disponibles.
 ENV PYTHONPATH=/app/apps/worker:/app/apps/api
 
+# Ejecutar como usuario sin privilegios (no root).
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app
+USER appuser
+
 CMD ["uv", "run", "arq", "worker.main.WorkerSettings"]

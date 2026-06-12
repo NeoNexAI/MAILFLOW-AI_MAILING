@@ -15,6 +15,8 @@ import hashlib
 import hmac
 import json
 import logging
+import secrets
+import time
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -34,16 +36,25 @@ logger = logging.getLogger("mailflow.api")
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
+# Tiempo de vida del state OAuth (segundos). Limita la ventana de un posible
+# login-CSRF: un state robado/replicado caduca pronto.
+STATE_TTL_SECONDS = 600
+
 
 def _sign_state(org_id: str) -> str:
-    """Firma {org_id, nonce} con HMAC-SHA256 → token base64url verificable."""
-    payload = json.dumps({"org": org_id}).encode()
+    """Firma {org, nonce, ts} con HMAC-SHA256 → token base64url verificable.
+
+    El `nonce` hace cada state único y el `ts` permite caducarlo.
+    """
+    payload = json.dumps(
+        {"org": org_id, "nonce": secrets.token_urlsafe(8), "ts": int(time.time())}
+    ).encode()
     sig = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(payload + b"." + sig).decode()
 
 
 def _verify_state(state: str) -> str:
-    """Valida la firma del state y devuelve el org_id. Lanza si es inválido."""
+    """Valida firma y caducidad del state; devuelve el org_id. Lanza si inválido."""
     try:
         raw = base64.urlsafe_b64decode(state.encode())
         payload, sig = raw.rsplit(b".", 1)
@@ -52,7 +63,10 @@ def _verify_state(state: str) -> str:
     expected = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).digest()
     if not hmac.compare_digest(sig, expected):
         raise HTTPException(status_code=400, detail="invalid_state")
-    return json.loads(payload)["org"]
+    data = json.loads(payload)
+    if int(time.time()) - int(data.get("ts", 0)) > STATE_TTL_SECONDS:
+        raise HTTPException(status_code=400, detail="state_expired")
+    return data["org"]
 
 
 @router.get("/{provider}/authorize")

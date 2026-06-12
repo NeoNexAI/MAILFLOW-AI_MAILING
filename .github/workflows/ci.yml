@@ -61,7 +61,7 @@ jobs:
         working-directory: apps/api
         env:
           SECRET_KEY: qdCa5nGhLjd8qY0CCaQP2dE000lbSYDmtPnhzAVeVgs=
-        run: uv run pytest tests -m "not integration"
+        run: uv run pytest tests -m "not integration" --cov=app --cov-fail-under=70
 
   lint-ts:
     name: Lint TypeScript (Biome)
@@ -100,3 +100,24 @@ jobs:
           file: infrastructure/docker/Dockerfile.api
           push: false
           tags: mailflow-api:ci
+
+  security-audit:
+    name: Dependency audit (CVEs)
+    runs-on: ubuntu-latest
+    # Advisory por ahora: visibiliza CVEs sin bloquear el merge. Endurecer a
+    # bloqueante (quitar continue-on-error) una vez fijada la baseline.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          python-version: "3.13"
+      - name: pip-audit (Python)
+        run: uvx pip-audit || true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: pnpm audit (JS)
+        run: pnpm install && pnpm audit --audit-level=high || true

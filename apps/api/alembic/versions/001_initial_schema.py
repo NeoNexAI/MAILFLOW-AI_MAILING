@@ -4,6 +4,7 @@ Revision ID: 001
 Revises:
 Create Date: 2026-05-11
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -68,20 +69,26 @@ def upgrade() -> None:
             sa.ForeignKey("organizations.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("provider_type", sa.String(20), nullable=False, server_default="imap"),
+        sa.Column(
+            "provider_type", sa.String(20), nullable=False, server_default="imap"
+        ),
         sa.Column("imap_host", sa.String(255), nullable=False),
         sa.Column("imap_port", sa.Integer, nullable=False, server_default="993"),
         sa.Column("use_ssl", sa.Boolean, nullable=False, server_default="true"),
         sa.Column("username", sa.String(255), nullable=False),
         sa.Column("encrypted_credentials", sa.String, nullable=False),
-        sa.Column("inbox_folder", sa.String(255), nullable=False, server_default="INBOX"),
+        sa.Column(
+            "inbox_folder", sa.String(255), nullable=False, server_default="INBOX"
+        ),
         sa.Column(
             "unclassified_folder",
             sa.String(255),
             nullable=False,
             server_default="Sin_Clasificar",
         ),
-        sa.Column("drafts_folder", sa.String(255), nullable=False, server_default="Drafts"),
+        sa.Column(
+            "drafts_folder", sa.String(255), nullable=False, server_default="Drafts"
+        ),
         sa.Column("interval_minutes", sa.Integer, nullable=False, server_default="5"),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
         sa.Column("last_cycle_at", sa.DateTime(timezone=True), nullable=True),
@@ -155,7 +162,9 @@ def upgrade() -> None:
             sa.ForeignKey("email_accounts.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("cycle_id", postgresql.UUID(as_uuid=True), unique=True, nullable=False),
+        sa.Column(
+            "cycle_id", postgresql.UUID(as_uuid=True), unique=True, nullable=False
+        ),
         sa.Column("emails_processed", sa.Integer, nullable=False, server_default="0"),
         sa.Column("drafts_saved", sa.Integer, nullable=False, server_default="0"),
         sa.Column("error_count", sa.Integer, nullable=False, server_default="0"),

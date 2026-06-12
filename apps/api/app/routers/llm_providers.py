@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,8 @@ async def _get_owned(
 
 @router.get("", response_model=list[LLMProviderOut])
 async def list_providers(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     org: Organization = Depends(require_org),
     session: AsyncSession = Depends(get_session),
 ) -> list[LLMProviderOut]:
@@ -51,6 +53,8 @@ async def list_providers(
         select(LLMProvider)
         .where(LLMProvider.org_id == org.id)
         .order_by(LLMProvider.created_at)
+        .limit(limit)
+        .offset(offset)
     )
     return [_to_out(p) for p in rows.scalars()]
 
