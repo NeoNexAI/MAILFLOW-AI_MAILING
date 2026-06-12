@@ -18,21 +18,32 @@ def test_state_sign_verify_roundtrip():
 
 
 def test_state_expires(monkeypatch):
+    import types
+
     from fastapi import HTTPException
 
     from app.routers import oauth as oauth_router
 
     state = oauth_router._sign_state("org-123")
-    # Avanzar el reloj más allá del TTL → el state caduca.
-    real_time = oauth_router.time.time()
+    # Avanzar el reloj más allá del TTL → el state caduca. Se reemplaza SOLO la
+    # referencia `time` del router (no el módulo time global, para no filtrar a
+    # otros tests).
+    future = oauth_router.time.time() + oauth_router.STATE_TTL_SECONDS + 1
     monkeypatch.setattr(
-        oauth_router.time,
-        "time",
-        lambda: real_time + oauth_router.STATE_TTL_SECONDS + 1,
+        oauth_router, "time", types.SimpleNamespace(time=lambda: future)
     )
     with pytest.raises(HTTPException) as exc:
         oauth_router._verify_state(state)
     assert exc.value.detail == "state_expired"
+
+
+def test_state_roundtrip_is_stable_across_many_signatures():
+    # La firma HMAC son bytes arbitrarios; el roundtrip debe funcionar SIEMPRE,
+    # no ~88% de las veces (regresión del separador de byte ambiguo).
+    from app.routers.oauth import _sign_state, _verify_state
+
+    for _ in range(300):
+        assert _verify_state(_sign_state("org-xyz")) == "org-xyz"
 
 
 def test_state_is_unique_per_call():

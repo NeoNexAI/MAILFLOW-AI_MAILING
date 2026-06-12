@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -65,8 +66,12 @@ async def checkout(
     if payload.plan not in ("pro", "team"):
         raise HTTPException(status_code=400, detail="invalid_plan")
     try:
-        url = billing.create_checkout_session(
-            payload.plan, str(org.id), org.stripe_customer_id
+        # Las llamadas al SDK de Stripe son síncronas → a un hilo.
+        url = await asyncio.to_thread(
+            billing.create_checkout_session,
+            payload.plan,
+            str(org.id),
+            org.stripe_customer_id,
         )
     except billing.BillingNotConfigured as exc:
         raise HTTPException(status_code=501, detail="billing_not_configured") from exc
@@ -80,7 +85,9 @@ async def portal(org: Organization = Depends(require_org)) -> UrlResponse:
     if not org.stripe_customer_id:
         raise HTTPException(status_code=400, detail="no_customer")
     try:
-        url = billing.create_portal_session(org.stripe_customer_id)
+        url = await asyncio.to_thread(
+            billing.create_portal_session, org.stripe_customer_id
+        )
     except billing.BillingNotConfigured as exc:
         raise HTTPException(status_code=501, detail="billing_not_configured") from exc
     return UrlResponse(url=url)
@@ -99,7 +106,8 @@ async def webhook(
     payload = await request.body()
     signature = request.headers.get("stripe-signature", "")
     try:
-        event = billing.parse_webhook(payload, signature)
+        # La verificación de firma del SDK de Stripe es síncrona → a un hilo.
+        event = await asyncio.to_thread(billing.parse_webhook, payload, signature)
     except billing.BillingNotConfigured as exc:
         raise HTTPException(status_code=501, detail="billing_not_configured") from exc
     except billing.BillingError as exc:
