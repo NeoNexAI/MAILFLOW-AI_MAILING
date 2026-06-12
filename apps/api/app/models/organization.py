@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, uuid_pk
@@ -18,6 +18,9 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(255))
     slug: Mapped[str] = mapped_column(String(100), unique=True)
     plan: Mapped[str] = mapped_column(String(20), default="free")
+    # Asientos contratados (plan Team se factura por asiento, mínimo 3).
+    # 1 para free/pro. Lo fija el webhook de Stripe tras el checkout.
+    seats: Mapped[int] = mapped_column(Integer, default=1)
     # SHA-256 hex of the org's API key (multi-tenant auth). Null until issued.
     api_key_hash: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True

@@ -38,3 +38,31 @@ def test_parse_webhook_not_configured(monkeypatch):
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "")
     with pytest.raises(billing.BillingNotConfigured):
         billing.parse_webhook(b"{}", "sig")
+
+
+def test_checkout_session_passes_seats_as_quantity(monkeypatch):
+    """Team por asientos: quantity y metadata.seats reflejan los seats pedidos."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from app import billing
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "STRIPE_PRICE_TEAM", "price_team")
+    captured: dict = {}
+
+    fake_stripe = MagicMock()
+
+    def fake_create(**params):
+        captured.update(params)
+        return SimpleNamespace(url="https://checkout.example/cs_test")
+
+    fake_stripe.checkout.Session.create.side_effect = fake_create
+    monkeypatch.setattr(billing, "_client", lambda: fake_stripe)
+
+    url = billing.create_checkout_session("team", "org-1", None, seats=5)
+
+    assert url == "https://checkout.example/cs_test"
+    assert captured["line_items"] == [{"price": "price_team", "quantity": 5}]
+    assert captured["metadata"]["seats"] == "5"
+    assert captured["metadata"]["plan"] == "team"

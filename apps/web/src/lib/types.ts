@@ -72,6 +72,7 @@ export interface CycleEnqueued {
 export interface PlanStatus {
   plan: string;
   label: string;
+  seats: number;
   max_accounts: number | null;
   max_emails_per_day: number | null;
   accounts_used: number;
