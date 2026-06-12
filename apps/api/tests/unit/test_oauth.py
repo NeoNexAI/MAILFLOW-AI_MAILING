@@ -37,6 +37,15 @@ def test_state_expires(monkeypatch):
     assert exc.value.detail == "state_expired"
 
 
+def test_state_roundtrip_is_stable_across_many_signatures():
+    # La firma HMAC son bytes arbitrarios; el roundtrip debe funcionar SIEMPRE,
+    # no ~88% de las veces (regresión del separador de byte ambiguo).
+    from app.routers.oauth import _sign_state, _verify_state
+
+    for _ in range(300):
+        assert _verify_state(_sign_state("org-xyz")) == "org-xyz"
+
+
 def test_state_is_unique_per_call():
     from app.routers.oauth import _sign_state
 

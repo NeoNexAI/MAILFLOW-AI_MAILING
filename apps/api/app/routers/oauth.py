@@ -42,6 +42,12 @@ router = APIRouter(prefix="/oauth", tags=["oauth"])
 STATE_TTL_SECONDS = 600
 
 
+# La firma HMAC-SHA256 siempre mide 32 bytes; se anexa al final del payload y se
+# trocea por longitud fija. (No usar un separador de byte: la firma binaria puede
+# contener cualquier byte, incluido el del separador → split ambiguo.)
+_SIG_LEN = 32
+
+
 def _sign_state(org_id: str) -> str:
     """Firma {org, nonce, ts} con HMAC-SHA256 → token base64url verificable.
 
@@ -51,14 +57,16 @@ def _sign_state(org_id: str) -> str:
         {"org": org_id, "nonce": secrets.token_urlsafe(8), "ts": int(time.time())}
     ).encode()
     sig = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(payload + b"." + sig).decode()
+    return base64.urlsafe_b64encode(payload + sig).decode()
 
 
 def _verify_state(state: str) -> str:
     """Valida firma y caducidad del state; devuelve el org_id. Lanza si inválido."""
     try:
         raw = base64.urlsafe_b64decode(state.encode())
-        payload, sig = raw.rsplit(b".", 1)
+        payload, sig = raw[:-_SIG_LEN], raw[-_SIG_LEN:]
+        if not payload:
+            raise ValueError("empty payload")
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail="invalid_state") from exc
     expected = hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).digest()
