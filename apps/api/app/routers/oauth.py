@@ -10,6 +10,7 @@ datos no verificados del navegador.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -106,7 +107,8 @@ async def callback(
 
     org_id = UUID(_verify_state(state))
     try:
-        result = oauth.exchange_code(provider, code)
+        # exchange_code hace I/O HTTP síncrono → a un hilo.
+        result = await asyncio.to_thread(oauth.exchange_code, provider, code)
     except oauth.OAuthError as exc:
         logger.warning("oauth exchange failed (%s): %s", provider, exc)
         return RedirectResponse(f"{success}?error=oauth_failed", status_code=302)

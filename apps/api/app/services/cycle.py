@@ -10,6 +10,7 @@ Este módulo contiene:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -23,7 +24,12 @@ from mailflow_core.classification.rule_engine import RuleEngine
 from mailflow_core.email_parser import EmailParser
 from mailflow_core.providers.base import EmailData
 from mailflow_core.providers.imap_generic import ImapGenericProvider
-from mailflow_core.resilience import RetryPolicy, retry_with_backoff
+from mailflow_core.resilience import (
+    CircuitBreaker,
+    CircuitOpenError,
+    RetryPolicy,
+    retry_with_backoff,
+)
 from mailflow_core.types import ClassificationResult, DraftRequest, ParsedEmail
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -172,8 +178,10 @@ class CycleService:
             refresh_token = decrypt(account.encrypted_oauth, settings.SECRET_KEY)[
                 "refresh_token"
             ]
-            access_token = oauth.access_token_from_refresh(
-                account.provider_type, refresh_token
+            access_token = await asyncio.to_thread(
+                oauth.access_token_from_refresh,
+                account.provider_type,
+                refresh_token,
             )
         elif account.encrypted_credentials:
             password = decrypt(account.encrypted_credentials, settings.SECRET_KEY)[
@@ -192,16 +200,23 @@ class CycleService:
         classify_client = _build_llm_client(llm_provider, for_generation=False)
         generate_client = _build_llm_client(llm_provider, for_generation=True)
         rule_engine = RuleEngine(account_config, llm_client=classify_client)
+        # Circuit breaker para la generación con LLM: si falla repetidamente en
+        # este ciclo, deja de intentarlo (evita martillear un LLM caído).
+        generation_breaker = CircuitBreaker(failure_threshold=3, reset_timeout=60.0)
 
         # ── 4. Fetch + loop (sin sesión DB abierta durante IMAP) ────────────
         emails: list[EmailData] = []
         try:
             try:
                 # IMAP connect+fetch con reintentos: tolera fallos transitorios
-                # de red/servidor antes de abortar el ciclo.
+                # de red/servidor antes de abortar el ciclo. El I/O de imapclient
+                # es síncrono → se ejecuta en un hilo para no bloquear el loop.
                 async def _connect_and_fetch() -> list[EmailData]:
-                    provider.connect()
-                    return provider.fetch_unprocessed_emails()
+                    def _sync() -> list[EmailData]:
+                        provider.connect()
+                        return provider.fetch_unprocessed_emails()
+
+                    return await asyncio.to_thread(_sync)
 
                 emails = await retry_with_backoff(
                     _connect_and_fetch,
@@ -228,6 +243,7 @@ class CycleService:
                         parser,
                         rule_engine,
                         generate_client,
+                        generation_breaker,
                         stats,
                         self._sf,
                     )
@@ -236,7 +252,7 @@ class CycleService:
                     stats["last_error"] = str(exc)
                     log.exception("Error processing uid=%s: %s", email_data.uid, exc)
         finally:
-            provider.disconnect()
+            await asyncio.to_thread(provider.disconnect)
 
         # ── 5. Finalizar audit_log ──────────────────────────────────────────
         duration_ms = int((time.monotonic() - start) * 1000)
@@ -262,10 +278,15 @@ async def _process_one(
     parser: EmailParser,
     rule_engine: RuleEngine,
     generate_client: LLMClient | None,
+    generation_breaker: CircuitBreaker,
     stats: dict,
     sf: async_sessionmaker,
 ) -> None:
-    """Procesa un email individual. Excepciones propagadas — caller las captura."""
+    """Procesa un email individual. Excepciones propagadas — caller las captura.
+
+    El I/O de red síncrono (IMAP del provider, clasificación/generación con LLM)
+    se ejecuta en hilos (`asyncio.to_thread`) para no bloquear el event loop.
+    """
 
     # a. Parse → ParsedEmail
     parsed: ParsedEmail = parser.parse(email_data)
@@ -278,21 +299,21 @@ async def _process_one(
                 account.id, parsed.in_reply_to
             )
 
-    # c. Clasificar
+    # c. Clasificar (rule_engine.classify puede llamar al LLM → a un hilo)
     if thread_folder:
         result = ClassificationResult(
             label=thread_folder, confidence=0.95, method="thread"
         )
     else:
-        result = rule_engine.classify(parsed)
+        result = await asyncio.to_thread(rule_engine.classify, parsed)
 
     destination = (
         result.label if result.label != "unclassified" else account.unclassified_folder
     )
 
     # d. INVARIANTE: mark ANTES de move. Tras move, el UID no existe en INBOX.
-    provider.mark_as_processed(email_data.uid)
-    provider.move_email(email_data.uid, destination)
+    await asyncio.to_thread(provider.mark_as_processed, email_data.uid)
+    await asyncio.to_thread(provider.move_email, email_data.uid, destination)
 
     # e. Generar borrador (solo emails no-internos y clasificados)
     draft_saved = False
@@ -311,20 +332,31 @@ async def _process_one(
             classification=result,
         )
 
-        # La generación con LLM es la llamada externa más inestable: reintentar
-        # con backoff evita perder el borrador por un fallo transitorio. El email
-        # ya está clasificado y movido, así que un fallo final solo omite el draft.
+        # Generación con LLM (síncrona → hilo). Protegida por:
+        #  - retry+backoff: tolera un fallo transitorio en este email.
+        #  - circuit breaker: si el LLM falla en varios emails seguidos, deja de
+        #    intentarlo el resto del ciclo (CircuitOpenError → se omite el draft).
+        # El email ya está clasificado y movido, así que omitir el draft no pierde
+        # trabajo crítico.
         async def _generate() -> str:
-            return generate_client.generate_draft(parsed, draft_request)
+            return await asyncio.to_thread(
+                generate_client.generate_draft, parsed, draft_request
+            )
 
-        try:
-            draft_text = await retry_with_backoff(
+        async def _generate_with_retry() -> str:
+            return await retry_with_backoff(
                 _generate,
-                policy=RetryPolicy(max_attempts=3, base_delay=0.5),
+                policy=RetryPolicy(max_attempts=2, base_delay=0.5),
                 on_retry=lambda attempt, exc: log.warning(
                     "LLM draft retry %d for uid=%s: %s", attempt, email_data.uid, exc
                 ),
             )
+
+        try:
+            draft_text = await generation_breaker.call(_generate_with_retry)
+        except CircuitOpenError:
+            log.warning("LLM circuit open; skipping draft for uid=%s", email_data.uid)
+            draft_text = ""
         except Exception as exc:
             log.warning(
                 "LLM draft generation failed for uid=%s: %s", email_data.uid, exc
@@ -338,7 +370,7 @@ async def _process_one(
                 body_text=draft_text,
                 in_reply_to=email_data.message_id,
             )
-            draft_saved = provider.save_draft(draft_bytes)
+            draft_saved = await asyncio.to_thread(provider.save_draft, draft_bytes)
 
     # f. Persistir en DB (commit por email → idempotencia ON CONFLICT DO NOTHING)
     async with sf() as session:
