@@ -7,12 +7,14 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import billing, quota
 from app.auth import require_org
 from app.database import get_session
 from app.models.organization import Organization
+from app.models.stripe_event import StripeEvent
 from app.plans import get_plan
 
 logger = logging.getLogger("mailflow.api")
@@ -102,6 +104,19 @@ async def webhook(
         raise HTTPException(status_code=501, detail="billing_not_configured") from exc
     except billing.BillingError as exc:
         raise HTTPException(status_code=400, detail="invalid_signature") from exc
+
+    # Idempotencia: Stripe reintenta. Si ya procesamos este event.id, salimos.
+    event_id = event.get("id")
+    if event_id:
+        inserted = await session.execute(
+            pg_insert(StripeEvent)
+            .values(id=event_id)
+            .on_conflict_do_nothing(index_elements=["id"])
+            .returning(StripeEvent.id)
+        )
+        await session.commit()
+        if inserted.scalar_one_or_none() is None:
+            return {"status": "duplicate"}
 
     await _apply_event(session, event)
     return {"status": "ok"}

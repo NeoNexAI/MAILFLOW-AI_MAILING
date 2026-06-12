@@ -17,6 +17,31 @@ def test_state_sign_verify_roundtrip():
     assert _verify_state(state) == "org-123"
 
 
+def test_state_expires(monkeypatch):
+    from fastapi import HTTPException
+
+    from app.routers import oauth as oauth_router
+
+    state = oauth_router._sign_state("org-123")
+    # Avanzar el reloj más allá del TTL → el state caduca.
+    real_time = oauth_router.time.time()
+    monkeypatch.setattr(
+        oauth_router.time,
+        "time",
+        lambda: real_time + oauth_router.STATE_TTL_SECONDS + 1,
+    )
+    with pytest.raises(HTTPException) as exc:
+        oauth_router._verify_state(state)
+    assert exc.value.detail == "state_expired"
+
+
+def test_state_is_unique_per_call():
+    from app.routers.oauth import _sign_state
+
+    # El nonce hace cada state distinto aunque la org sea la misma.
+    assert _sign_state("org-1") != _sign_state("org-1")
+
+
 def test_state_tamper_is_rejected():
     from fastapi import HTTPException
 

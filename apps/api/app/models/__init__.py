@@ -7,6 +7,7 @@ from app.models.llm_provider import LLMProvider
 from app.models.organization import Organization
 from app.models.processed_email import ProcessedEmail
 from app.models.rules import DomainRule, InternalDomain, KeywordRule
+from app.models.stripe_event import StripeEvent
 
 __all__ = [
     "Base",
@@ -18,4 +19,5 @@ __all__ = [
     "LLMProvider",
     "Organization",
     "ProcessedEmail",
+    "StripeEvent",
 ]

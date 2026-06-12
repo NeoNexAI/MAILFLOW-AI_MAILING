@@ -19,6 +19,10 @@ COPY packages/core/mailflow_core/ packages/core/mailflow_core/
 COPY infrastructure/docker/entrypoint.api.sh /entrypoint.api.sh
 RUN chmod +x /entrypoint.api.sh
 
+# Ejecutar como usuario sin privilegios (no root).
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app
+USER appuser
+
 EXPOSE 8000
 
 # El entrypoint aplica migraciones (alembic upgrade head) y arranca uvicorn.

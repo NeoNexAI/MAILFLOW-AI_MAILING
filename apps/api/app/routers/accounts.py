@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +41,8 @@ async def _get_owned_account(
 
 @router.get("", response_model=list[EmailAccountOut])
 async def list_accounts(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     org: Organization = Depends(require_org),
     session: AsyncSession = Depends(get_session),
 ) -> list[EmailAccount]:
@@ -48,6 +50,8 @@ async def list_accounts(
         select(EmailAccount)
         .where(EmailAccount.org_id == org.id)
         .order_by(EmailAccount.created_at)
+        .limit(limit)
+        .offset(offset)
     )
     return list(rows.scalars())
 

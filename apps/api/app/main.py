@@ -49,6 +49,20 @@ app.include_router(oauth_router)
 app.include_router(billing_router)
 
 
+@app.on_event("startup")
+async def _warn_if_open() -> None:
+    """Secure-by-default: avisa si la API queda accesible sin autenticación.
+
+    En `single` sin SINGLE_TENANT_API_KEY la API está abierta (uso solo en
+    localhost/LAN). Si se expone a internet hay que definir la API key.
+    """
+    if settings.AUTH_MODE == "single" and not settings.SINGLE_TENANT_API_KEY:
+        logger.warning(
+            "SECURITY: API is OPEN (AUTH_MODE=single without SINGLE_TENANT_API_KEY). "
+            "Set SINGLE_TENANT_API_KEY before exposing this instance to the internet."
+        )
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     """Readiness probe: comprueba conectividad con la base de datos.

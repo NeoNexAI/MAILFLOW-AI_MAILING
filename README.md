@@ -43,22 +43,28 @@ operations.
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 15 + Tailwind + shadcn/ui |
+| Frontend | Next.js 15 (App Router) |
 | Backend API | Python 3.13 + FastAPI |
 | Workers | ARQ (asyncio jobs) |
-| Database | PostgreSQL + pgvector / SQLite (self-host) |
-| Auth | Better Auth (multi-tenant, self-hosted) |
+| Database | PostgreSQL |
+| Auth | API-key per organization (multi-tenant); Better Auth integration planned |
 | LLM Router | LiteLLM (100+ providers) |
 | Email | IMAP + M365 OAuth2 + Gmail OAuth2 |
 
-## Features (v1)
+## Features
 
-- **Auto-classification** — deterministic cascade (domain → thread → keyword) + LLM fallback
-- **Draft generation** — replies in your writing style, saved as IMAP Drafts (never auto-sent)
-- **Template library** — reusable templates with auto-detection by keywords
+- **Auto-classification** — deterministic cascade (internal/client domain → thread → keyword) + LLM fallback
+- **Draft generation** — replies saved as IMAP Drafts (never auto-sent)
 - **Multi-LLM** — choose any engine per workspace: Ollama, OpenAI, Anthropic, Gemini, vLLM…
-- **Learning loop** — corrections and edits feed back to improve future suggestions
-- **Web dashboard** — view cycles, stats, configure rules and templates
+- **One-click mailbox connect** — Gmail / Microsoft 365 via OAuth2, or generic IMAP
+- **Web dashboard** — onboarding wizard, mailboxes, cycle history & stats, billing
+- **Multi-tenant SaaS or single-tenant self-host** — same codebase, one env var
+
+### Roadmap (not yet implemented)
+
+- Template library with keyword auto-detection
+- Learning loop (corrections feed back into future drafts)
+- Writing-style capture, semantic search
 
 ## Development
 

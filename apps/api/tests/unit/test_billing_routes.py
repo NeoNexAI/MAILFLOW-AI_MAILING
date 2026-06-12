@@ -101,3 +101,47 @@ async def test_webhook_invalid_signature_400(client, monkeypatch):
         headers={"stripe-signature": "bad"},
     )
     assert resp.status_code == 400
+
+
+async def test_webhook_checkout_completed_upgrades_org_and_dedups(
+    client, session, monkeypatch
+):
+    """Happy path del webhook: checkout.session.completed → plan=pro, idempotente."""
+    import uuid
+
+    from app import billing
+    from app.models.organization import Organization
+
+    org = Organization(name="W", slug=f"wh-{uuid.uuid4().hex[:8]}", plan="free")
+    session.add(org)
+    await session.commit()
+
+    event = {
+        "id": f"evt_{uuid.uuid4().hex}",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {"org_id": str(org.id), "plan": "pro"},
+                "customer": "cus_123",
+                "subscription": "sub_123",
+            }
+        },
+    }
+    # Saltar la verificación de firma: probamos la lógica de aplicación + dedup.
+    monkeypatch.setattr(billing, "parse_webhook", lambda payload, sig: event)
+
+    r1 = await client.post(
+        "/billing/webhook", content=b"{}", headers={"stripe-signature": "x"}
+    )
+    assert r1.status_code == 200
+    assert r1.json()["status"] == "ok"
+    await session.refresh(org)
+    assert org.plan == "pro"
+    assert org.stripe_subscription_id == "sub_123"
+
+    # Reintento del mismo event.id → deduplicado, no se reaplica.
+    r2 = await client.post(
+        "/billing/webhook", content=b"{}", headers={"stripe-signature": "x"}
+    )
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "duplicate"

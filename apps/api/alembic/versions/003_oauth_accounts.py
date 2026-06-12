@@ -22,12 +22,18 @@ def upgrade() -> None:
     )
     # Password ya no es obligatorio: las cuentas OAuth no tienen.
     op.alter_column(
-        "email_accounts", "encrypted_credentials", existing_type=sa.String(), nullable=True
+        "email_accounts",
+        "encrypted_credentials",
+        existing_type=sa.String(),
+        nullable=True,
     )
 
 
 def downgrade() -> None:
     op.alter_column(
-        "email_accounts", "encrypted_credentials", existing_type=sa.String(), nullable=False
+        "email_accounts",
+        "encrypted_credentials",
+        existing_type=sa.String(),
+        nullable=False,
     )
     op.drop_column("email_accounts", "encrypted_oauth")

@@ -13,6 +13,7 @@ def test_all_tables_registered():
         "internal_domains",
         "processed_emails",
         "audit_log",
+        "stripe_events",
     }
     assert expected == set(Base.metadata.tables.keys())
 

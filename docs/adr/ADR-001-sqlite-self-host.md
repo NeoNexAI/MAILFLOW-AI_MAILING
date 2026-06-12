@@ -1,24 +1,33 @@
-# ADR-001: SQLite for self-hosted mode, PostgreSQL for SaaS
+# ADR-001: PostgreSQL only (SQLite self-host mode dropped)
 
-**Date:** 2026-05-06
-**Status:** Accepted
+**Date:** 2026-05-06 · **Superseded:** 2026-05-30
+**Status:** Superseded — PostgreSQL is the only supported database
 
 ## Context
 
-MailFlow supports two deployment modes:
-- **SaaS** (`app.mailflow.app`): multi-tenant, needs row-level security, vector search (v2), concurrent writes
-- **Self-hosted** (`docker compose up`): single user/org, minimal ops overhead, no cloud dependency
+The original plan was to support **SQLite** for self-hosted single-tenant
+deployments and **PostgreSQL** for the SaaS, selecting the driver via
+`DATABASE_URL`. In practice the code came to depend on PostgreSQL-specific
+features that have no SQLite equivalent:
+
+- `ARRAY(String)` columns (`app/models/rules.py` — keyword rules)
+- `INSERT ... ON CONFLICT DO NOTHING` (`app/repositories/cycle.py`, billing dedup)
+- `postgresql.UUID` and server-side defaults across all migrations
+
+Maintaining a portable schema would have meant giving up these features or
+writing a second code path — cost not justified for the current stage.
 
 ## Decision
 
-- SaaS uses **PostgreSQL 17 + pgvector** with Row-Level Security on `org_id`
-- Self-hosted uses **SQLite** (via `aiosqlite`) with a single "default-org"
-- SQLAlchemy 2.0 async with the same ORM models for both; driver selected by `DATABASE_URL`
-- Migration scripts provided for SQLite → Postgres for users who outgrow self-hosted
+- **PostgreSQL is the only supported database** for both self-host and SaaS.
+- Self-host gets PostgreSQL out of the box via `docker compose` (the `postgres`
+  service), so "one command" still holds — no external dependency for the user.
+- The original SQLite mode and the SQLite→Postgres migration scripts are **not
+  implemented** and are removed from the docs.
 
 ## Consequences
 
-+ Zero external dependencies for self-hosted users (no Postgres required)
-+ Same codebase, one schema
-- SQLite has no native RLS; security is enforced in application layer for self-hosted
-- pgvector semantic search (v2 feature) is SaaS-only unless user runs Postgres locally
++ One schema, one tested code path; full use of PG features (ARRAY, upserts).
++ Self-host stays one-command (Postgres ships in the compose file).
+- No "zero-dependency single-file DB" option. Revisit only if there is real
+  community demand for an embedded mode.
