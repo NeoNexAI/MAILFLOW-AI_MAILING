@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     # Solo debe viajar por la red interna; nunca exponerlo públicamente.
     INTERNAL_API_SECRET: str = ""
 
+    # Observabilidad.
+    #   LOG_FORMAT: "json" (producción, una línea por evento) o "text" (dev).
+    #   LOG_LEVEL: nivel raíz (DEBUG/INFO/WARNING/...).
+    #   ENVIRONMENT: etiqueta del entorno (development/staging/production).
+    LOG_FORMAT: str = "json"
+    LOG_LEVEL: str = "INFO"
+    ENVIRONMENT: str = "development"
+    # Sentry (errores). Vacío = desactivado (no se envía nada, no-op).
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+
     # Billing (Stripe). Vacío = billing desactivado (rutas devuelven 501).
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""

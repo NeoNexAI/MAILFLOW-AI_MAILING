@@ -24,6 +24,7 @@ dependencies = [
     "mailflow-core",
     "cryptography>=43.0",
     "stripe>=11.0",
+    "sentry-sdk>=2.0",
 ]
 
 [project.optional-dependencies]
