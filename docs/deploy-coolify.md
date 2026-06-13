@@ -151,9 +151,14 @@ SINGLE_TENANT_API_KEY=<el mismo token que en el api, si lo usas>
 Verifica:
 
 ```bash
-curl https://api.tudominio.com/health   # {"status":"ok","db":"up",...}
+curl https://api.tudominio.com/health    # {"status":"ok","db":"up",...}
+curl https://api.tudominio.com/metrics    # contadores Prometheus (cycles/drafts/errors)
 # y abre https://app.tudominio.com → onboarding
 ```
+
+> `/metrics` (formato Prometheus) expone solo totales del despliegue (sin PII ni
+> por-organización). Como `/health`, va sin autenticar: restríngelo a tu red de
+> scraping en el reverse proxy si la instancia es pública.
 
 ## 5. Despliegue continuo
 

@@ -21,6 +21,7 @@ from app.routers import (
     cycles_router,
     internal_router,
     llm_providers_router,
+    metrics_router,
     oauth_router,
     rules_router,
 )
@@ -51,6 +52,7 @@ app.include_router(cycles_router)
 app.include_router(oauth_router)
 app.include_router(billing_router)
 app.include_router(internal_router)
+app.include_router(metrics_router)
 
 
 @app.on_event("startup")
