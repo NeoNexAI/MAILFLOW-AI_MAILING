@@ -1,5 +1,5 @@
-/** Cliente HTTP tipado del API MailFlow. */
-import { API_KEY, API_URL } from "./config";
+/** Cliente HTTP tipado del API MailFlow (vía proxy BFF same-origin). */
+import { API_BASE } from "./config";
 import type {
   Cycle,
   CycleEnqueued,
@@ -24,9 +24,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> | undefined),
   };
-  if (API_KEY) headers["X-API-Key"] = API_KEY;
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
     cache: "no-store",

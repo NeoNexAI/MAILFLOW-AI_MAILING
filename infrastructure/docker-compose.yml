@@ -81,12 +81,21 @@ services:
     build:
       context: ..
       dockerfile: infrastructure/docker/Dockerfile.web
-      args:
-        # La URL del API se hornea en build (NEXT_PUBLIC_*). Para producción,
-        # apúntala al dominio público del API.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     environment:
       NODE_ENV: production
+      # El navegador habla con el proxy BFF (/api/mf) del propio Next; el proxy
+      # reenvía al API por la red interna usando esta URL (server-side).
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:8000}
+      # Modo de auth web: "off" self-host (sin login), "on" SaaS (Better Auth).
+      WEB_AUTH: ${WEB_AUTH:-off}
+      # Solo en self-host con API key: el proxy la añade server-side.
+      SINGLE_TENANT_API_KEY: ${SINGLE_TENANT_API_KEY:-}
+      # Necesarios cuando WEB_AUTH=on (SaaS).
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mailflow:mailflow@postgres:5432/mailflow}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      WEB_SECRET_KEY: ${WEB_SECRET_KEY:-}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:

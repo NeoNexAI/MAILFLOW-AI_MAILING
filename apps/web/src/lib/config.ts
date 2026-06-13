@@ -1,12 +1,8 @@
 /**
- * Configuración de cliente. La URL de la API se inyecta vía
- * NEXT_PUBLIC_API_URL (build/runtime). Por defecto el backend local.
+ * Configuración de cliente.
+ *
+ * El navegador siempre habla con el proxy BFF del propio Next (mismo origen);
+ * el proxy reenvía al FastAPI por la red interna añadiendo la API key en el
+ * servidor. Por eso la API key nunca está en el bundle del navegador.
  */
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-/**
- * API key opcional para modo single-tenant protegido o multi-tenant.
- * En el self-host abierto por defecto no hace falta.
- */
-export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
+export const API_BASE = "/api/mf";
