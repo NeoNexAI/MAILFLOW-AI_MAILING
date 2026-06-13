@@ -103,6 +103,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # One-shot: crea las tablas de Better Auth (SaaS / WEB_AUTH=on) en el mismo
+  # Postgres. No corre por defecto; ejecútalo una vez antes de activar el SaaS:
+  #   docker compose -f infrastructure/docker-compose.yml --profile migrate \
+  #     run --rm web-migrate
+  # Es idempotente (CREATE TABLE/INDEX IF NOT EXISTS), seguro de re-ejecutar.
+  web-migrate:
+    profiles: ["migrate"]
+    image: pgvector/pgvector:pg17
+    entrypoint:
+      - sh
+      - -c
+      - psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f /schema/better-auth-schema.sql
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mailflow}:${POSTGRES_PASSWORD:-mailflow}@postgres:5432/${POSTGRES_DB:-mailflow}
+    volumes:
+      - ../apps/web/better-auth-schema.sql:/schema/better-auth-schema.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   postgres_data:
   redis_data:

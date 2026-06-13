@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "auth:generate": "WEB_AUTH=on better-auth generate --config src/lib/auth.ts --output ./better-auth-schema.sql -y",
+    "auth:migrate": "WEB_AUTH=on better-auth migrate --config src/lib/auth.ts -y"
   },
   "dependencies": {
     "better-auth": "1.6.18",
@@ -17,6 +19,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.4.21",
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",

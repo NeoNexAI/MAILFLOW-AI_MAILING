@@ -76,17 +76,38 @@ OAUTH_SUCCESS_REDIRECT=https://app.tudominio.com/app/dashboard
 
 # SaaS multi-tenant (solo si vas a operar para terceros):
 # AUTH_MODE=multi
+# INTERNAL_API_SECRET=<token aleatorio>   # el MISMO que en mailflow-web; habilita POST /internal/orgs
 # STRIPE_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=...
 # STRIPE_PRICE_PRO=price_... STRIPE_PRICE_TEAM=price_...
 # BILLING_SUCCESS_URL=https://app.tudominio.com/app/billing?status=success
 # BILLING_CANCEL_URL=https://app.tudominio.com/app/billing?status=cancel
 ```
 
-En `mailflow-web` (runtime; el API URL ya va horneado por build arg):
+En `mailflow-web` (runtime). El navegador habla con el proxy BFF (`/api/mf`) del
+propio Next; el proxy reenvía al API por la red interna con `API_INTERNAL_URL`,
+así la API key nunca llega al navegador.
 
 ```bash
 NODE_ENV=production
+API_INTERNAL_URL=http://HOST-INTERNO-API:8000   # red interna, no público
+
+# Self-host (por defecto): sin login. Si el API tiene SINGLE_TENANT_API_KEY,
+# pónsela también aquí para que el proxy la añada server-side.
+WEB_AUTH=off
+SINGLE_TENANT_API_KEY=<el mismo token que en el api, si lo usas>
+
+# SaaS multi-tenant (login + organizaciones con Better Auth). Solo si operas
+# para terceros — requiere migrar las tablas de Better Auth (ver §4):
+# WEB_AUTH=on
+# DATABASE_URL=postgresql://USER:PASS@HOST-INTERNO:5432/DB   # SIN +asyncpg (lo usa Better Auth/pg)
+# BETTER_AUTH_SECRET=<openssl rand -base64 32>
+# BETTER_AUTH_URL=https://app.tudominio.com
+# WEB_SECRET_KEY=<openssl rand -base64 32>   # cifra la API key de la org en su metadata
+# INTERNAL_API_SECRET=<token aleatorio>       # el MISMO que en el api; aprovisiona orgs
 ```
+
+> El `INTERNAL_API_SECRET` debe coincidir en `mailflow-api` y `mailflow-web`, y
+> **nunca** exponerse: bloquea `/internal/*` en el reverse proxy (solo red interna).
 
 > ⚠️ La clave `SECRET_KEY` cifra las credenciales IMAP/LLM en la DB. Genera una
 > nueva y **no uses jamás** la del `.env` de desarrollo (está quemada en el
@@ -99,7 +120,26 @@ NODE_ENV=production
    automáticamente (crea/actualiza el esquema) y arranca uvicorn.
    - Healthcheck en Coolify: path `/health`, puerto 8000 (devuelve 200 si la DB responde).
 3. **Deploy `mailflow-worker`** (depende de que la DB ya esté migrada por el api).
-4. **Deploy `mailflow-web`**.
+4. **Solo SaaS (`WEB_AUTH=on`): migra las tablas de Better Auth** una vez, en el
+   mismo Postgres. Better Auth usa tablas propias (`user`, `session`, `account`,
+   `organization`, `member`, `invitation`, `verification`) que **no** colisionan
+   con las del API (`organizations` en plural, etc.). Dos formas:
+
+   ```bash
+   # a) Con el toolchain (checkout del repo, deps instaladas), apuntando a la DB prod:
+   WEB_AUTH=on DATABASE_URL=postgresql://USER:PASS@HOST:5432/DB \
+     pnpm --filter @mailflow/web auth:migrate
+
+   # b) Solo con psql (sin Node): aplica el SQL idempotente versionado:
+   psql "postgresql://USER:PASS@HOST:5432/DB" -v ON_ERROR_STOP=1 \
+     -f apps/web/better-auth-schema.sql
+   # …o vía compose (perfil one-shot):
+   docker compose -f infrastructure/docker-compose.yml --profile migrate run --rm web-migrate
+   ```
+
+   Es idempotente: seguro de re-ejecutar. Re-genera el SQL con
+   `pnpm --filter @mailflow/web auth:generate` si cambia la config de auth.
+5. **Deploy `mailflow-web`**.
 
 Verifica:
 
