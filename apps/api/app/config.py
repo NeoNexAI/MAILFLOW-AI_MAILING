@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # A dónde enviar al usuario en el frontend tras conectar (éxito/fracaso).
     OAUTH_SUCCESS_REDIRECT: str = "http://localhost:3000/app/dashboard"
 
+    # Secreto compartido web↔api para el endpoint interno de aprovisionamiento
+    # (POST /internal/orgs). Vacío = el endpoint interno queda desactivado (501).
+    # Solo debe viajar por la red interna; nunca exponerlo públicamente.
+    INTERNAL_API_SECRET: str = ""
+
     # Billing (Stripe). Vacío = billing desactivado (rutas devuelven 501).
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
