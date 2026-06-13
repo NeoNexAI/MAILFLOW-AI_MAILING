@@ -18,7 +18,7 @@ importers:
   apps/web:
     dependencies:
       better-auth:
-        specifier: ^1.6.18
+        specifier: 1.6.18
         version: 1.6.18(next@15.1.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(pg@8.21.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       next:
         specifier: 15.1.3
