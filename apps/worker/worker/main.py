@@ -8,6 +8,8 @@ from uuid import UUID
 
 from app.config import settings
 from app.database import async_session_factory
+from app.logging_config import bind_log_context, clear_log_context, setup_logging
+from app.observability import init_sentry
 from app.repositories.account import AccountRepository
 from app.services.cycle import CycleService
 from arq import cron
@@ -18,6 +20,8 @@ log = logging.getLogger("mailflow.worker")
 
 async def on_startup(ctx: dict) -> None:
     """Inicializa recursos compartidos en el contexto ARQ."""
+    setup_logging()
+    init_sentry()
     ctx["session_factory"] = async_session_factory
 
 
@@ -33,16 +37,28 @@ async def process_account_cycle(ctx: dict, account_id: str) -> dict:
       agotan los reintentos, ARQ invoca on_job_failure → dead-letter logging.
     """
     job_try = ctx.get("job_try", 1)
-    log.info("cycle start account=%s try=%d", account_id, job_try)
-    service = CycleService(ctx["session_factory"])
-    result = await service.run(UUID(account_id))
-    log.info(
-        "cycle done account=%s emails=%d drafts=%d errors=%d",
-        account_id,
-        result.emails_processed,
-        result.drafts_saved,
-        result.errors,
-    )
+    bind_log_context(account_id=account_id, job_id=ctx.get("job_id"), job_try=job_try)
+    try:
+        log.info("cycle start account=%s try=%d", account_id, job_try)
+        service = CycleService(ctx["session_factory"])
+        result = await service.run(UUID(account_id))
+        # Evento estructurado de fin de ciclo (sirve como métrica vía logs).
+        log.info(
+            "cycle done account=%s emails=%d drafts=%d errors=%d",
+            account_id,
+            result.emails_processed,
+            result.drafts_saved,
+            result.errors,
+            extra={
+                "event": "cycle_completed",
+                "cycle_id": str(result.cycle_id),
+                "emails_processed": result.emails_processed,
+                "drafts_saved": result.drafts_saved,
+                "errors": result.errors,
+            },
+        )
+    finally:
+        clear_log_context()
     return {
         "account_id": account_id,
         "cycle_id": str(result.cycle_id),
@@ -67,6 +83,12 @@ async def on_job_failure(ctx: dict, exc: BaseException) -> None:
         func,
         type(exc).__name__,
         exc,
+        extra={
+            "event": "dead_letter",
+            "job_id": job_id,
+            "func": func,
+            "error_type": type(exc).__name__,
+        },
     )
 
 

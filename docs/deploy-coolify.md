@@ -56,6 +56,13 @@ DATABASE_URL=postgresql+asyncpg://USER:PASS@HOST-INTERNO:5432/DB   # ¡con +asyn
 REDIS_URL=redis://HOST-INTERNO-REDIS:6379/0
 SECRET_KEY=<genera una NUEVA, nunca la de ejemplo>
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Observabilidad (logs JSON + Sentry opcional). Mismas vars en api y worker:
+LOG_FORMAT=json            # una línea JSON por evento (deja "text" en local)
+LOG_LEVEL=INFO
+ENVIRONMENT=production
+SENTRY_DSN=                # vacío = sin Sentry; pon el DSN del proyecto para activarlo
+SENTRY_TRACES_SAMPLE_RATE=0.0
 ```
 
 Solo en `mailflow-api`:

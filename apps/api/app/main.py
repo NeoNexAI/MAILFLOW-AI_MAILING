@@ -12,6 +12,9 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import async_session_factory
+from app.logging_config import setup_logging
+from app.middleware import RequestIdMiddleware
+from app.observability import init_sentry
 from app.routers import (
     accounts_router,
     billing_router,
@@ -22,10 +25,8 @@ from app.routers import (
     rules_router,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
+setup_logging()
+init_sentry()
 logger = logging.getLogger("mailflow.api")
 
 app = FastAPI(
@@ -34,6 +35,7 @@ app = FastAPI(
     description="Open source AI email assistant API",
 )
 
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
